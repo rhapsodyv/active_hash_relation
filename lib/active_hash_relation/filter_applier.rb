@@ -31,6 +31,44 @@ module ActiveHashRelation
         next if @params[c.name.to_s].nil?
         next if @params[c.name.to_s].is_a?(String) && @params[c.name.to_s].blank?
 
+        # handle or filter for a single column using Arel: "name": ["value1", {"null": "true"}]
+        # TODO: refactor this to use Arel for everything
+        if @params[c.name.to_s].is_a?(Array)
+          new_value = []
+          @params[c.name.to_s].each do |v|
+            if v.is_a?(Hash) && !v[:null].nil?
+              if v[:null] == true || v[:null] == 'true' || v[:null] == 1 || v[:null] == '1'
+                if @is_not
+                  new_value << @resource.arel_table[c.name.to_s].not_eq(nil)
+                  #resource = resource.where.not("#{table_name}.#{column} IS NULL")
+                else
+                  new_value << @resource.arel_table[c.name.to_s].eq(nil)
+                  #resource = resource.where("#{table_name}.#{column} IS NULL")
+                end
+              end
+
+              if v[:null] == false || v[:null] == 'false' || v[:null] == 0 || v[:null] == '0'
+                if @is_not
+                  new_value << @resource.arel_table[c.name.to_s].eq(nil)
+                  # resource = resource.where.not("#{table_name}.#{column} IS NOT NULL")
+                else
+                  new_value << @resource.arel_table[c.name.to_s].not_eq(nil)
+                  # resource = resource.where("#{table_name}.#{column} IS NOT NULL")
+                end
+              end
+            else
+              new_value << @resource.arel_table[c.name.to_s].eq(v)
+            end
+          end
+          new_value = new_value.reduce(:or)
+          if @is_not
+            @resource = @resource.where.not(new_value)
+          else
+            @resource = @resource.where(new_value)
+          end
+          next
+        end
+
         case c.type
         when :integer
           if @model.defined_enums[c.name] && @model.defined_enums[c.name][@params[c.name]]
