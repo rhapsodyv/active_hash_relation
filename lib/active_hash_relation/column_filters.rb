@@ -1,5 +1,6 @@
 module ActiveHashRelation::ColumnFilters
   def normalize_value(model, column, value)
+    return value if column.nil? || model.nil?
     if model.defined_enums[column.name]
       if value.is_a?(Array)
         value = value.map { |v| model.defined_enums[column.name][v] || v }
@@ -36,11 +37,11 @@ module ActiveHashRelation::ColumnFilters
   end
 
   def filter_float(resource, column, table_name, param)
-    filter_integer(resource, column, table_name, param)
+    filter_integer(nil, nil, resource, column, table_name, param)
   end
 
   def filter_decimal(resource, column, table_name, param)
-    filter_integer(resource, column, table_name, param)
+    filter_integer(nil, nil, resource, column, table_name, param)
   end
 
   def filter_string(resource, column, table_name, param)
@@ -82,7 +83,7 @@ module ActiveHashRelation::ColumnFilters
       if !param[:null].nil?
         return null_filters(resource, table_name, column, param)
       else
-        return apply_leq_geq_le_ge_filters(resource, table_name, column, param)
+        return apply_leq_geq_le_ge_filters(nil, nil, resource, table_name, column, param)
       end
     else
       if @is_not
@@ -107,7 +108,7 @@ module ActiveHashRelation::ColumnFilters
       if !param[:null].nil?
         return null_filters(resource, table_name, column, param)
       else
-        return apply_leq_geq_le_ge_filters(resource, table_name, column, param)
+        return apply_leq_geq_le_ge_filters(nil, nil, resource, table_name, column, param)
       end
     else
       if @is_not
