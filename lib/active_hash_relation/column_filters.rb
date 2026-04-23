@@ -1,23 +1,36 @@
 module ActiveHashRelation::ColumnFilters
-  def filter_integer(resource, column, table_name, param)
+  def normalize_value(model, column, value)
+    if model.defined_enums[column.name]
+      if value.is_a?(Array)
+        value = value.map { |v| model.defined_enums[column.name][v] || v }
+      else
+        value = model.defined_enums[column.name][value] || value
+      end
+    end
+    value
+  end
+
+  def filter_integer(model, column, resource, column_name, table_name, param)
     if param.is_a? Array
       n_param = param.to_s.gsub("\"","'").gsub("[","").gsub("]","") #fix this!
+      n_param = normalize_value(model, column, n_param)
       if @is_not
-        return resource.where.not("#{table_name}.#{column} IN (#{n_param})")
+        return resource.where.not("#{table_name}.#{column_name} IN (#{n_param})")
       else
-        return resource.where("#{table_name}.#{column} IN (#{n_param})")
+        return resource.where("#{table_name}.#{column_name} IN (#{n_param})")
       end
     elsif param.is_a? Hash
       if !param[:null].nil?
-        return null_filters(resource, table_name, column, param)
+        return null_filters(resource, table_name, column_name, param)
       else
-        return apply_leq_geq_le_ge_filters(resource, table_name, column, param)
+        return apply_leq_geq_le_ge_filters(model, column, resource, table_name, column_name, param)
       end
     else
+      param = normalize_value(model, column, param)
       if @is_not
-        return resource.where.not("#{table_name}.#{column} = ?", param)
+        return resource.where.not("#{table_name}.#{column_name} = ?", param)
       else
-        return resource.where("#{table_name}.#{column} = ?", param)
+        return resource.where("#{table_name}.#{column_name} = ?", param)
       end
     end
   end
@@ -127,34 +140,34 @@ module ActiveHashRelation::ColumnFilters
 
   private
 
-  def apply_leq_geq_le_ge_filters(resource, table_name, column, param)
-    return resource.where("#{table_name}.#{column} = ?", param[:eq]) if param[:eq]
+  def apply_leq_geq_le_ge_filters(model, column, resource, table_name, column_name, param)
+    return resource.where("#{table_name}.#{column_name} = ?", normalize_value(model, column, param[:eq])) if param[:eq]
 
     if !param[:leq].blank?
       if @is_not
-        resource = resource.where.not("#{table_name}.#{column} <= ?", param[:leq])
+        resource = resource.where.not("#{table_name}.#{column_name} <= ?", normalize_value(model, column, param[:leq]))
       else
-        resource = resource.where("#{table_name}.#{column} <= ?", param[:leq])
+        resource = resource.where("#{table_name}.#{column_name} <= ?", normalize_value(model, column, param[:leq]))
       end
     elsif !param[:le].blank?
       if @is_not
-        resource = resource.where.not("#{table_name}.#{column} < ?", param[:le])
+        resource = resource.where.not("#{table_name}.#{column_name} < ?", normalize_value(model, column, param[:le]))
       else
-        resource = resource.where("#{table_name}.#{column} < ?", param[:le])
+        resource = resource.where("#{table_name}.#{column_name} < ?", normalize_value(model, column, param[:le]))
       end
     end
 
     if !param[:geq].blank?
       if @is_not
-        resource = resource.where.not("#{table_name}.#{column} >= ?", param[:geq])
+        resource = resource.where.not("#{table_name}.#{column_name} >= ?", normalize_value(model, column, param[:geq]))
       else
-        resource = resource.where("#{table_name}.#{column} >= ?", param[:geq])
+        resource = resource.where("#{table_name}.#{column_name} >= ?", normalize_value(model, column, param[:geq]))
       end
     elsif !param[:ge].blank?
       if @is_not
-        resource = resource.where.not("#{table_name}.#{column} > ?", param[:ge])
+        resource = resource.where.not("#{table_name}.#{column_name} > ?", normalize_value(model, column, param[:ge]))
       else
-        resource = resource.where("#{table_name}.#{column} > ?", param[:ge])
+        resource = resource.where("#{table_name}.#{column_name} > ?", normalize_value(model, column, param[:ge]))
       end
     end
 
