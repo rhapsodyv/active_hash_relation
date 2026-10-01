@@ -69,21 +69,30 @@ module ActiveHashRelation
           next
         end
 
+        value = @params[c.name]
+        # Negações (`not_eq`, `not_in`, `not_like`) saem primeiro; o que
+        # sobra do hash segue pros operadores de sempre do tipo.
+        if value.is_a?(Hash) && negated_operators?(value)
+          @resource = filter_negated(@model, c, @resource, value)
+          value = without_negated_operators(value)
+          next if value.nil?
+        end
+
         case c.type
         when :integer
-          @resource = filter_integer(@model, c, @resource, c.name, table_name, @params[c.name])
+          @resource = filter_integer(@model, c, @resource, c.name, table_name, value)
         when :float
-          @resource = filter_float(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_float(@resource, c.name, table_name, value)
         when :decimal
-          @resource = filter_decimal(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_decimal(@resource, c.name, table_name, value)
         when :string, :uuid, :text
-          @resource = filter_string(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_string(@resource, c.name, table_name, value)
         when :date
-          @resource = filter_date(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_date(@resource, c.name, table_name, value)
         when :datetime, :timestamp
-          @resource = filter_datetime(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_datetime(@resource, c.name, table_name, value)
         when :boolean
-          @resource = filter_boolean(@resource, c.name, table_name, @params[c.name])
+          @resource = filter_boolean(@resource, c.name, table_name, value)
         end
       end
 

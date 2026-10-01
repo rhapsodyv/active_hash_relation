@@ -22,6 +22,48 @@ module ActiveHashRelation::ColumnFilters
     normalized
   end
 
+  # "Diferente de", "não está em" e "não contém":
+  #   {campo: {not_eq: X}}, {campo: {not_in: [X, Y]}}, {campo: {not_like: "x"}}
+  #
+  # O vazio ENTRA. O `not` deste gem segue o SQL — `campo <> X` deixa de
+  # fora o registro com o campo NULL, porque comparar NULL não dá
+  # verdadeiro —, e "Unidade diferente de 101" esconderia o que não tem
+  # unidade. Quem filtra "tudo menos X" espera ver o que não é X, inclusive
+  # o que está em branco (é o que fazem o Notion, o Airtable e o Metabase).
+  # Pra deixar o vazio de fora, a pessoa combina com `{null: false}`.
+  NEGATED_OPERATORS = %w[not_eq not_in not_like].freeze
+
+  def negated_operators?(param)
+    (param.keys.map(&:to_s) & NEGATED_OPERATORS).any?
+  end
+
+  # O resto do hash, pros outros operadores; nil quando não sobra nada —
+  # o `with_ilike` sozinho não filtra.
+  def without_negated_operators(param)
+    rest = param.reject { |key, _| NEGATED_OPERATORS.include?(key.to_s) }
+    (rest.keys.map(&:to_s) - ['with_ilike']).empty? ? nil : rest
+  end
+
+  def filter_negated(model, column, resource, param)
+    attribute = resource.arel_table[column.name]
+    clauses = []
+
+    values = []
+    values << param[:not_eq] unless param[:not_eq].nil? || param[:not_eq] == ''
+    values.concat(Array(param[:not_in])) unless param[:not_in].nil?
+    clauses << attribute.not_in(Array(normalize_value(model, column, values))) unless values.empty?
+
+    unless param[:not_like].blank?
+      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(param[:not_like].to_s)}%"
+      clauses << attribute.does_not_match(pattern, nil, !param[:with_ilike])
+    end
+
+    return resource if clauses.empty?
+
+    clause = clauses.reduce { |acc, node| acc.and(node) }.or(attribute.eq(nil))
+    @is_not ? resource.where.not(clause) : resource.where(clause)
+  end
+
   def normalize_value(model, column, value)
     return value if column.nil? || model.nil?
     if model.defined_enums[column.name]
