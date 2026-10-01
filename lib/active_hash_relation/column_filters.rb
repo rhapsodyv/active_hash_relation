@@ -1,4 +1,27 @@
 module ActiveHashRelation::ColumnFilters
+  # O cliente nomeia os operadores como SQL (`gt`/`lt`) e abrevia os de
+  # texto (`start`/`end`); este gem sempre os chamou de `ge`/`le` e
+  # `starts_with`/`ends_with`. Aceitar os dois nomes evita o pior modo de
+  # falhar que existe aqui: a chave desconhecida é descartada em silêncio,
+  # a resposta volta 200 e a lista aparece sem o filtro aplicado.
+  OPERATOR_ALIASES = {
+    'gt'    => 'ge',
+    'lt'    => 'le',
+    'start' => 'starts_with',
+    'end'   => 'ends_with'
+  }.freeze
+
+  # Devolve uma cópia com o nome canônico preenchido. O nome canônico
+  # explícito vence o apelido; nada é mutado no hash do chamador.
+  def with_operator_aliases(param)
+    normalized = param.respond_to?(:with_indifferent_access) ? param.with_indifferent_access : param
+    OPERATOR_ALIASES.each do |from, to|
+      next if normalized[from].nil? || !normalized[to].nil?
+      normalized[to] = normalized[from]
+    end
+    normalized
+  end
+
   def normalize_value(model, column, value)
     return value if column.nil? || model.nil?
     if model.defined_enums[column.name]
@@ -142,6 +165,8 @@ module ActiveHashRelation::ColumnFilters
   private
 
   def apply_leq_geq_le_ge_filters(model, column, resource, table_name, column_name, param)
+    param = with_operator_aliases(param)
+
     return resource.where("#{table_name}.#{column_name} = ?", normalize_value(model, column, param[:eq])) if param[:eq]
 
     if !param[:leq].blank?
@@ -176,6 +201,8 @@ module ActiveHashRelation::ColumnFilters
   end
 
   def apply_like_filters(resource, table_name, column, param)
+    param = with_operator_aliases(param)
+
     like_method = "LIKE"
     like_method = "ILIKE" if param[:with_ilike]
 
@@ -200,6 +227,17 @@ module ActiveHashRelation::ColumnFilters
         resource = resource.where.not("#{table_name}.#{column} #{like_method} ?", "%#{param[:like]}%")
       else
         resource = resource.where("#{table_name}.#{column} #{like_method} ?", "%#{param[:like]}%")
+      end
+    end
+
+    # `matches` usa o padrão exatamente como veio, sem os `%` que o `like`
+    # acrescenta — mesma semântica do Arel#matches. É o operador para quem
+    # quer escrever o próprio curinga ("Jo%o", "%@gmail.com").
+    if !param[:matches].blank?
+      if @is_not
+        resource = resource.where.not("#{table_name}.#{column} #{like_method} ?", param[:matches])
+      else
+        resource = resource.where("#{table_name}.#{column} #{like_method} ?", param[:matches])
       end
     end
 
